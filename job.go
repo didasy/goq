@@ -32,10 +32,15 @@ func (j *Job) Retry() error {
 }
 
 // Method to fail job to failed job set.
+// Also set the status Code to 3
 func (j *Job) Fail() error {
 	err := client.SAdd(JOB_FAILED_PREFIX+j.queueName, j.JSON).Err()
 	if err != nil {
 		return errors.New("Failed to add to failed jobs set of job " + j.ID + " : " + err.Error())
+	}
+	err = j.SetStatus(3, 0)
+	if err != nil {
+		return err
 	}
 
 	return nil
