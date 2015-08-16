@@ -16,8 +16,10 @@ var (
 	client *redis.Client
 )
 
+// Function signature for job processor
 type Processor func(*Job)
 
+// Function signature for error handler
 type ErrorHandler func(error)
 
 type ConnectionOptions struct {
@@ -41,6 +43,7 @@ type Options struct {
 	ErrorHandler ErrorHandler
 }
 
+// Function to create new Queue struct
 func New(opt *Options) *Queue {
 	if client == nil {
 		redisOpt := &redis.Options{
@@ -79,6 +82,7 @@ type QueueStatus struct {
 	QueueLength int64
 }
 
+// Method to get status of this queue
 func (q *Queue) QueueStatus() (*QueueStatus, error) {
 	if client != nil {
 		queueLen, err := client.LLen(q.queueName).Result()
@@ -122,6 +126,7 @@ func (q *Queue) Enqueue(jobJSON string) (string, error) {
 	return id, nil
 }
 
+// Method to run the queue worker
 func (q *Queue) Run() {
 	for i := uint8(0); i < q.concurrency; i++ {
 		go work(q.jobChannel, q.errorHandler, q.processor)
@@ -174,6 +179,7 @@ type Job struct {
 	Status *Status
 }
 
+// Method to set this job Status locally and to redis
 func (j *Job) SetStatus(code, progress uint8) error {
 	j.Status.Code = code
 	j.Status.Progress = progress
@@ -186,6 +192,7 @@ func (j *Job) SetStatus(code, progress uint8) error {
 	return client.Set(JOB_STATUS_PREFIX+j.ID, string(statusJSON), 0).Err()
 }
 
+// Method to update this job Status from redis
 func (j *Job) GetStatus() error {
 	dataJSON, err := client.Get(JOB_STATUS_PREFIX + j.ID).Result()
 	if err != nil {
