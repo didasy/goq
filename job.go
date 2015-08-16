@@ -26,6 +26,11 @@ func (j *Job) Retry() error {
 	if err != nil {
 		return errors.New("Failed to remove from failed jobs set of job " + j.ID + " : " + err.Error())
 	}
+	// set status to 0 again
+	err = j.SetStatus(0, 0)
+	if err != nil {
+		return err
+	}
 	j.processor(j)
 
 	return nil
