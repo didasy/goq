@@ -18,10 +18,10 @@ var (
 	client *redis.Client
 )
 
-// Function signature for job processor
+// Function signature for job processor.
 type Processor func(*Job)
 
-// Function signature for error handler
+// Function signature for error handler.
 type ErrorHandler func(error)
 
 type ConnectionOptions struct {
@@ -45,7 +45,7 @@ type Options struct {
 	ErrorHandler ErrorHandler
 }
 
-// Function to create new Queue struct
+// Function to create new Queue struct.
 func New(opt *Options) *Queue {
 	if client == nil {
 		redisOpt := &redis.Options{
@@ -84,7 +84,7 @@ type QueueStatus struct {
 	QueueLength int64
 }
 
-// Method to get status of this queue
+// Method to get status of this queue.
 func (q *Queue) QueueStatus() (*QueueStatus, error) {
 	if client != nil {
 		queueLen, err := client.LLen(q.queueName).Result()
@@ -100,7 +100,7 @@ func (q *Queue) QueueStatus() (*QueueStatus, error) {
 	return nil, errors.New("Failed to queue status: no initialized client")
 }
 
-// Method to enqueue job to queue, returns job id
+// Method to enqueue job to queue, returns job id.
 func (q *Queue) Enqueue(jobJSON string) (string, error) {
 	var err error
 	// push to queue
@@ -128,7 +128,7 @@ func (q *Queue) Enqueue(jobJSON string) (string, error) {
 	return id, nil
 }
 
-// Method to run the queue worker
+// Method to run the queue worker.
 func (q *Queue) Run() {
 	for i := uint8(0); i < q.concurrency; i++ {
 		go q.work()
