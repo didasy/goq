@@ -166,9 +166,9 @@ func (q *Queue) work() {
 		}
 		// create a job
 		job := &Job{
-			ID:     id,
-			JSON:   jobJSON,
-			Status: status,
+			ID:        id,
+			JSON:      jobJSON,
+			Status:    status,
 			processor: q.processor,
 			queueName: q.queueName,
 		}
