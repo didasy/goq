@@ -10,6 +10,7 @@ import (
 
 const (
 	JOB_STATUS_PREFIX = "goq:queue:job:status:"
+	JOB_CACHE_PREFIX  = "goq:queue:job:cache:"
 )
 
 var (
@@ -23,16 +24,16 @@ type Processor func(*Job)
 type ErrorHandler func(error)
 
 type ConnectionOptions struct {
-	Addr string
-	Password string
-	DB int64
-	MaxRetries int
-	DialTimeout time.Duration
-	ReadTimeout time.Duration
+	Addr         string
+	Password     string
+	DB           int64
+	MaxRetries   int
+	DialTimeout  time.Duration
+	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
-	PoolSize int
-	PoolTimeout time.Duration
-	IdleTimeout time.Duration
+	PoolSize     int
+	PoolTimeout  time.Duration
+	IdleTimeout  time.Duration
 }
 
 type Options struct {
@@ -47,16 +48,16 @@ type Options struct {
 func New(opt *Options) *Queue {
 	if client == nil {
 		redisOpt := &redis.Options{
-			Addr: opt.Connection.Addr,
-			Password: opt.Connection.Password,
-			DB: opt.Connection.DB,
-			MaxRetries: opt.Connection.MaxRetries,
-			DialTimeout: opt.Connection.DialTimeout,
-			ReadTimeout: opt.Connection.ReadTimeout,
+			Addr:         opt.Connection.Addr,
+			Password:     opt.Connection.Password,
+			DB:           opt.Connection.DB,
+			MaxRetries:   opt.Connection.MaxRetries,
+			DialTimeout:  opt.Connection.DialTimeout,
+			ReadTimeout:  opt.Connection.ReadTimeout,
 			WriteTimeout: opt.Connection.WriteTimeout,
-			PoolSize: opt.Connection.PoolSize,
-			PoolTimeout: opt.Connection.PoolTimeout,
-			IdleTimeout: opt.Connection.IdleTimeout,
+			PoolSize:     opt.Connection.PoolSize,
+			PoolTimeout:  opt.Connection.PoolTimeout,
+			IdleTimeout:  opt.Connection.IdleTimeout,
 		}
 		client = redis.NewClient(redisOpt)
 	}
@@ -174,9 +175,10 @@ func work(jobChannel <-chan string, errorHandler ErrorHandler, processor Process
 }
 
 type Job struct {
-	ID     string
-	JSON   string
-	Status *Status
+	ID         string
+	JSON       string
+	ResultJSON string
+	Status     *Status
 }
 
 // Method to set this job Status locally and to redis
@@ -205,4 +207,55 @@ func (j *Job) GetStatus() error {
 type Status struct {
 	Code     uint8
 	Progress uint8
+}
+
+// Method to save this job result to redis with ttl in seconds
+func (j *Job) SetCache(ttl time.Duration) error {
+	return client.Set(JOB_CACHE_PREFIX + j.ID, j.ResultJSON, ttl).Err()
+}
+
+// Method to check if this job result is cached
+func (j *Job) IsCached() (bool, error) {
+	return client.Exists(JOB_CACHE_PREFIX + j.ID).Result()
+}
+
+// Method to load cached job result from redis
+func (j *Job) GetCache() error {
+	// check if cached or not first
+	cached, err := j.IsCached()
+	if err != nil {
+		return err
+	}
+	if !cached {
+		return errors.New("Failed to get cache of job " + j.ID + " : " + err.Error())
+	}
+	j.ResultJSON, err = client.Get(JOB_CACHE_PREFIX + j.ID).Result()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Function to get cache of job result json by job id.
+// Returns existence, the JSON, and error
+func GetCache(id string) (bool, string, error) {
+	j := &Job{
+		ID: id,
+	}
+
+	exists, err := j.IsCached()
+	if err != nil {
+		return false, "", err
+	}
+	if !exists {
+		return false, "", nil
+	}
+
+	err = j.GetCache()
+	if err != nil {
+		return false, "", err
+	}
+
+	return true, j.ResultJSON, nil
 }
