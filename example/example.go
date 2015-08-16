@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+var (
+	retried bool
+)
+
 func main() {
 	var err error
 
@@ -36,10 +40,38 @@ func main() {
 	log.Println(status)
 
 	time.Sleep(time.Second * 1)
+
+	// load from cache
+	exists, cacheJSON, err := goq.GetCache(id)
+	if err != nil {
+		panic(err)
+	}
+	log.Println(exists, cacheJSON)
 }
 
 func doJob(job *goq.Job) {
 	log.Println(job.ID, job.JSON)
+	// save to cache
+	job.ResultJSON = `{"result":"json"}`
+	err := job.SetCache(time.Second * 5)
+	if err != nil {
+		panic(err)
+	}
+
+	// fail and retry once
+	if !retried {
+		retried = true
+		// fail job
+		err = job.Fail()
+		if err != nil {
+			panic(err)
+		}
+		// then retry
+		err = job.Retry()
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func errorHandler(err error) {

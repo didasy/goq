@@ -11,6 +11,7 @@ import (
 const (
 	JOB_STATUS_PREFIX = "goq:queue:job:status:"
 	JOB_CACHE_PREFIX  = "goq:queue:job:cache:"
+	JOB_FAILED_PREFIX = "goq:queue:job:failed:"
 )
 
 var (
@@ -130,7 +131,7 @@ func (q *Queue) Enqueue(jobJSON string) (string, error) {
 // Method to run the queue worker
 func (q *Queue) Run() {
 	for i := uint8(0); i < q.concurrency; i++ {
-		go work(q.jobChannel, q.errorHandler, q.processor)
+		go q.work()
 	}
 	for {
 		// dequeue the job
@@ -145,22 +146,22 @@ func (q *Queue) Run() {
 	}
 }
 
-func work(jobChannel <-chan string, errorHandler ErrorHandler, processor Processor) {
+func (q *Queue) work() {
 	for {
-		jobJSON := <-jobChannel
+		jobJSON := <-q.jobChannel
 		// create the id
 		id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
 		// check status
 		statusJSON, err := client.Get(JOB_STATUS_PREFIX + id).Result()
 		if err != nil {
-			errorHandler(errors.New("Failed to get status of job " + id + " : " + err.Error()))
+			q.errorHandler(errors.New("Failed to get status of job " + id + " : " + err.Error()))
 			continue
 		}
 		// unmarshal the status
 		status := &Status{}
 		err = json.Unmarshal([]byte(statusJSON), status)
 		if err != nil {
-			errorHandler(errors.New("Failed to unmarshal status of job " + id + " : " + err.Error()))
+			q.errorHandler(errors.New("Failed to unmarshal status of job " + id + " : " + err.Error()))
 			continue
 		}
 		// create a job
@@ -168,94 +169,10 @@ func work(jobChannel <-chan string, errorHandler ErrorHandler, processor Process
 			ID:     id,
 			JSON:   jobJSON,
 			Status: status,
+			processor: q.processor,
+			queueName: q.queueName,
 		}
 		// process it
-		processor(job)
+		q.processor(job)
 	}
-}
-
-type Job struct {
-	ID         string
-	JSON       string
-	ResultJSON string
-	Status     *Status
-}
-
-// Method to set this job Status locally and to redis
-func (j *Job) SetStatus(code, progress uint8) error {
-	j.Status.Code = code
-	j.Status.Progress = progress
-
-	statusJSON, err := json.Marshal(j.Status)
-	if err != nil {
-		return err
-	}
-
-	return client.Set(JOB_STATUS_PREFIX+j.ID, string(statusJSON), 0).Err()
-}
-
-// Method to update this job Status from redis
-func (j *Job) GetStatus() error {
-	dataJSON, err := client.Get(JOB_STATUS_PREFIX + j.ID).Result()
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal([]byte(dataJSON), j.Status)
-}
-
-type Status struct {
-	Code     uint8
-	Progress uint8
-}
-
-// Method to save this job result to redis with ttl in seconds
-func (j *Job) SetCache(ttl time.Duration) error {
-	return client.Set(JOB_CACHE_PREFIX + j.ID, j.ResultJSON, ttl).Err()
-}
-
-// Method to check if this job result is cached
-func (j *Job) IsCached() (bool, error) {
-	return client.Exists(JOB_CACHE_PREFIX + j.ID).Result()
-}
-
-// Method to load cached job result from redis
-func (j *Job) GetCache() error {
-	// check if cached or not first
-	cached, err := j.IsCached()
-	if err != nil {
-		return err
-	}
-	if !cached {
-		return errors.New("Failed to get cache of job " + j.ID + " : " + err.Error())
-	}
-	j.ResultJSON, err = client.Get(JOB_CACHE_PREFIX + j.ID).Result()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Function to get cache of job result json by job id.
-// Returns existence, the JSON, and error
-func GetCache(id string) (bool, string, error) {
-	j := &Job{
-		ID: id,
-	}
-
-	exists, err := j.IsCached()
-	if err != nil {
-		return false, "", err
-	}
-	if !exists {
-		return false, "", nil
-	}
-
-	err = j.GetCache()
-	if err != nil {
-		return false, "", err
-	}
-
-	return true, j.ResultJSON, nil
 }
