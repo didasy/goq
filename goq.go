@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	QUEUER_STATUS_PREFIX = "goq:queue:job:status:"
+	JOB_STATUS_PREFIX = "goq:queue:job:status:"
 )
 
 var (
@@ -114,7 +114,7 @@ func (q *Queue) Enqueue(jobJSON string) (string, error) {
 	// create id
 	id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
 	// set status of this job
-	err = client.Set(QUEUER_STATUS_PREFIX+id, string(statusJSON), 0).Err()
+	err = client.Set(JOB_STATUS_PREFIX+id, string(statusJSON), 0).Err()
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +145,7 @@ func work(jobChannel <-chan string, errorHandler ErrorHandler, processor Process
 		// create the id
 		id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
 		// check status
-		statusJSON, err := client.Get(QUEUER_STATUS_PREFIX + id).Result()
+		statusJSON, err := client.Get(JOB_STATUS_PREFIX + id).Result()
 		if err != nil {
 			errorHandler(errors.New("Failed to get status of job " + id + " : " + err.Error()))
 			continue
@@ -183,11 +183,11 @@ func (j *Job) SetStatus(code, progress uint8) error {
 		return err
 	}
 
-	return client.Set(QUEUER_STATUS_PREFIX+j.ID, string(statusJSON), 0).Err()
+	return client.Set(JOB_STATUS_PREFIX+j.ID, string(statusJSON), 0).Err()
 }
 
 func (j *Job) GetStatus() error {
-	dataJSON, err := client.Get(QUEUER_STATUS_PREFIX + j.ID).Result()
+	dataJSON, err := client.Get(JOB_STATUS_PREFIX + j.ID).Result()
 	if err != nil {
 		return err
 	}
