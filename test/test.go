@@ -23,10 +23,11 @@ func main() {
 
 	go q.Run()
 
-	err = q.Enqueue(`{"data":"test"}`)
+	id, err := q.Enqueue(`{"data":"test"}`)
 	if err != nil {
 		panic(err)
 	}
+	log.Println("Job id is: ", id)
 
 	status, err := q.QueueStatus()
 	if err != nil {

@@ -94,12 +94,13 @@ func (q *Queue) QueueStatus() (*QueueStatus, error) {
 	return nil, errors.New("Failed to queue status: no initialized client")
 }
 
-func (q *Queue) Enqueue(jobJSON string) error {
+// Method to enqueue job to queue, returns job id
+func (q *Queue) Enqueue(jobJSON string) (string, error) {
 	var err error
 	// push to queue
 	err = client.RPush(q.queueName, jobJSON).Err()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// create status JSON
@@ -108,17 +109,17 @@ func (q *Queue) Enqueue(jobJSON string) error {
 		Progress: 0,
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	// create id
 	id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
 	// set status of this job
 	err = client.Set(QUEUER_STATUS_PREFIX+id, string(statusJSON), 0).Err()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return id, nil
 }
 
 func (q *Queue) Run() {
