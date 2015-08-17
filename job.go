@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+	"encoding/base32"
 )
 
 type Status struct {
@@ -134,16 +135,17 @@ func (j *Job) GetCache() error {
 	return nil
 }
 
-// Function to get cache of job result json by job id.
+// Function to get cache of job result json by job JSON.
 // Returns existence, the JSON, and error.
-func GetCache(id string) (bool, string, error) {
+func GetCache(jobJSON string) (bool, string, error) {
+	id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
 	j := &Job{
 		ID: id,
 	}
 
 	exists, err := j.IsCached()
 	if err != nil {
-		return false, "", err
+		return false, "", errors.New("Failed to check if job " + id + " is cached : " + err.Error())
 	}
 	if !exists {
 		return false, "", nil
@@ -151,8 +153,24 @@ func GetCache(id string) (bool, string, error) {
 
 	err = j.GetCache()
 	if err != nil {
-		return false, "", err
+		return false, "", errors.New("Failed to get cache of job " + id + " : " + err.Error())
 	}
 
 	return true, j.ResultJSON, nil
+}
+
+// Function to get status of job by job JSON
+// Returns job status and error
+func GetStatus(jobJSON string) (*Status, error) {
+	id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
+	j := &Job{
+		ID: id,
+	}
+
+	err := j.GetStatus()
+	if err != nil {
+		return nil, err
+	}
+
+	return j.Status, nil
 }

@@ -42,7 +42,7 @@ func main() {
 	time.Sleep(time.Second * 1)
 
 	// load from cache
-	exists, cacheJSON, err := goq.GetCache(id)
+	exists, cacheJSON, err := goq.GetCache(`{"data":"test"}`)
 	if err != nil {
 		panic(err)
 	}
@@ -74,6 +74,6 @@ func doJob(job *goq.Job) {
 	}
 }
 
-func errorHandler(err error) {
+func errorHandler(queue *goq.Queue, jobJSON string, err error) {
 	panic(err)
 }

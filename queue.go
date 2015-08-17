@@ -21,20 +21,20 @@ var (
 // Function signature for job processor.
 type Processor func(*Job)
 
-// Function signature for error handler.
-type ErrorHandler func(error)
+// Function signature for queue level error handler.
+type ErrorHandler func(*Queue, string, error)
 
 type ConnectionOptions struct {
-	Addr         string
-	Password     string
-	DB           int64
-	MaxRetries   int
-	DialTimeout  time.Duration
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	PoolSize     int
-	PoolTimeout  time.Duration
-	IdleTimeout  time.Duration
+	Addr         string        `json:"host"`
+	Password     string        `json:"password"`
+	DB           int64         `json:"db"`
+	MaxRetries   int           `json:"max_retries"`
+	DialTimeout  time.Duration `json:"dial_timeout"`
+	ReadTimeout  time.Duration `json:"read_timeout"`
+	WriteTimeout time.Duration `json:"write_timeout"`
+	PoolSize     int           `json:"pool_size"`
+	PoolTimeout  time.Duration `json:"pool_timeout"`
+	IdleTimeout  time.Duration `json:"idle_timeout"`
 }
 
 type Options struct {
@@ -138,7 +138,7 @@ func (q *Queue) Run() {
 		// jobJSONSlice will always be 2 length
 		jobJSONSlice, err := client.BLPop(0, q.queueName).Result()
 		if err != nil {
-			q.errorHandler(err)
+			q.errorHandler(q, "", err)
 			continue
 		}
 
@@ -154,14 +154,14 @@ func (q *Queue) work() {
 		// check status
 		statusJSON, err := client.Get(JOB_STATUS_PREFIX + id).Result()
 		if err != nil {
-			q.errorHandler(errors.New("Failed to get status of job " + id + " : " + err.Error()))
+			q.errorHandler(q, jobJSON, errors.New("Failed to get status of job "+id+" : "+err.Error()))
 			continue
 		}
 		// unmarshal the status
 		status := &Status{}
 		err = json.Unmarshal([]byte(statusJSON), status)
 		if err != nil {
-			q.errorHandler(errors.New("Failed to unmarshal status of job " + id + " : " + err.Error()))
+			q.errorHandler(q, jobJSON, errors.New("Failed to unmarshal status of job "+id+" : "+err.Error()))
 			continue
 		}
 		// create a job
