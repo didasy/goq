@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-var (
-	retried bool
-)
-
 func main() {
 	var err error
 
@@ -37,7 +33,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	log.Println(status)
+	log.Println("Queue length: ", status)
 
 	time.Sleep(time.Second * 1)
 
@@ -56,21 +52,6 @@ func doJob(job *goq.Job) {
 	err := job.SetCache(time.Second * 5)
 	if err != nil {
 		panic(err)
-	}
-
-	// fail and retry once
-	if !retried {
-		retried = true
-		// fail job
-		err = job.Fail()
-		if err != nil {
-			panic(err)
-		}
-		// then retry
-		err = job.Retry()
-		if err != nil {
-			panic(err)
-		}
 	}
 }
 

@@ -1,10 +1,10 @@
 package goq
 
 import (
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"time"
-	"encoding/base32"
 )
 
 type Status struct {
@@ -19,22 +19,6 @@ type Job struct {
 	Status     *Status
 	processor  Processor
 	queueName  string
-}
-
-// Method to requeue job, will remove this job from failed job if exists.
-func (j *Job) Retry() error {
-	err := client.SRem(JOB_FAILED_PREFIX+j.queueName, j.JSON).Err()
-	if err != nil {
-		return errors.New("Failed to remove from failed jobs set of job " + j.ID + " : " + err.Error())
-	}
-	// set status to 0 again
-	err = j.SetStatus(0, 0)
-	if err != nil {
-		return err
-	}
-	j.processor(j)
-
-	return nil
 }
 
 // Method to fail job to failed job set.
@@ -136,7 +120,7 @@ func (j *Job) GetCache() error {
 }
 
 // Function to get cache of job result json by job JSON.
-// Returns existence, the JSON, and error.
+// Returns existence, the result JSON, and error.
 func GetCache(jobJSON string) (bool, string, error) {
 	id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
 	j := &Job{

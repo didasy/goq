@@ -6,6 +6,7 @@ import (
 	"errors"
 	"gopkg.in/redis.v3"
 	"time"
+	"fmt"
 )
 
 const (
@@ -82,22 +83,75 @@ type Queue struct {
 
 type QueueStatus struct {
 	QueueLength int64
+	FailedJobs int64
+}
+
+func (qs *QueueStatus) String() string {
+	return fmt.Sprintf("&QueueStatus{ QueueLength: %d, FailedJobs: %d }", qs.QueueLength, qs.FailedJobs)
 }
 
 // Method to get status of this queue.
 func (q *Queue) QueueStatus() (*QueueStatus, error) {
-	if client != nil {
-		queueLen, err := client.LLen(q.queueName).Result()
-		if err != nil {
-			return nil, err
-		}
-
-		return &QueueStatus{
-			QueueLength: queueLen,
-		}, nil
+	queueLen, err := client.LLen(q.queueName).Result()
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, errors.New("Failed to queue status: no initialized client")
+	failedJobs, err := client.SCard(JOB_FAILED_PREFIX+q.queueName).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return &QueueStatus{
+		QueueLength: queueLen,
+		FailedJobs: failedJobs,
+	}, nil
+}
+
+// Method to re-enqueue failed job, returns job id.
+func (q *Queue) ReEnqueue(jobJSON string) (string, error) {
+	var err error
+
+	// check if jobJSON is a failed job
+	isAFailedJob, err := client.SIsMember(JOB_FAILED_PREFIX+q.queueName, jobJSON).Result()
+	if err != nil {
+		return "", err
+	}
+	if !isAFailedJob {
+		return "", errors.New("Job is not in failed job pool")
+	}
+
+	// create id
+	id := base32.StdEncoding.EncodeToString([]byte(jobJSON))
+
+	// remove from failed job pool
+	err = client.SRem(JOB_FAILED_PREFIX+q.queueName, jobJSON).Err()
+	if err != nil {
+		return "", errors.New("Failed to remove from failed jobs set of job " + id + " : " + err.Error())
+	}
+
+	// re-enqueue
+	err = client.RPush(q.queueName, jobJSON).Err()
+	if err != nil {
+		return "", err
+	}
+
+	// set status to 0 again
+	// create status JSON
+	statusJSON, err := json.Marshal(&Status{
+		Code:     0,
+		Progress: 0,
+	})
+	if err != nil {
+		return "", err
+	}
+	// apply the status
+	err = client.Set(JOB_STATUS_PREFIX+id, string(statusJSON), 0).Err()
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
 }
 
 // Method to enqueue job to queue, returns job id.
